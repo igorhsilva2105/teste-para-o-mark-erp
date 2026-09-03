@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conversor XLSX Shopee → JSON</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; background: #f7f9fc; }
+        h1 { color: #1a1a2e; }
+        .container { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        input[type="file"] { display: block; margin: 20px 0; }
+        button { background: #0d6efd; color: white; border: none; padding: 10px 24px; border-radius: 6px; cursor: pointer; font-size: 16px; }
+        button:hover { background: #0b5ed7; }
+        pre { background: #2d2d2d; color: #f8f8f2; padding: 20px; border-radius: 8px; overflow-x: auto; max-height: 600px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; }
+        .actions { display: flex; gap: 15px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+        .download-btn { background: #28a745; }
+        .download-btn:hover { background: #218838; }
+        .info { margin: 10px 0; color: #555; }
+        .error { color: #dc3545; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📄 XLSX Shopee → JSON</h1>
+
+        <input type="file" id="fileInput" accept=".xlsx,.xls">
+        <button id="convertBtn">Converter</button>
+
+        <div id="info" class="info"></div>
+
+        <div class="actions">
+            <button id="downloadBtn" class="download-btn" style="display:none;">⬇️ Baixar JSON</button>
+        </div>
+
+        <h3>Resultado (JSON):</h3>
+        <pre id="output">Aguardando arquivo...</pre>
+    </div>
+
+    <!-- Carregar a biblioteca SheetJS via CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <script>
+        (function() {
+            const fileInput = document.getElementById('fileInput');
+            const convertBtn = document.getElementById('convertBtn');
+            const outputPre = document.getElementById('output');
+            const infoDiv = document.getElementById('info');
+            const downloadBtn = document.getElementById('downloadBtn');
+
+            let jsonData = null;
+
+            // Função para encontrar a linha de cabeçalho (que contém "ID do pedido")
+            function findHeaderRow(worksheet) {
+                const range = XLSX.utils.decode_range(worksheet['!ref']);
+                // Primeiro, procura na coluna A (índice 0)
+                for (let row = range.s.r; row <= range.e.r; row++) {
+                    const cell = worksheet[XLSX.utils.encode_cell({ r: row, c: 0 })];
+                    if (cell && cell.v && String(cell.v).trim().includes('ID do pedido')) {
+                        return row;
+                    }
+                }
+                // Se não encontrar, procura em qualquer coluna
+                for (let row = range.s.r; row <= range.e.r; row++) {
+                    for (let col = range.s.c; col <= range.e.c; col++) {
+                        const cell = worksheet[XLSX.utils.encode_cell({ r: row, c: col })];
+                        if (cell && cell.v && String(cell.v).trim().includes('ID do pedido')) {
+                            return row;
+                        }
+                    }
+                }
+                return -1; // não encontrado
+            }
+
+            function convertXLSXToJSON(workbook) {
+                // Pega a primeira planilha (assume que os dados estão nela)
+                const sheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[sheetName];
+
+                const headerRowIndex = findHeaderRow(worksheet);
+                if (headerRowIndex === -1) {
+                    throw new Error('Não foi possível encontrar a linha de cabeçalho com "ID do pedido".');
+                }
+
+                const range = XLSX.utils.decode_range(worksheet['!ref']);
+
+                // Lê o cabeçalho (todas as colunas até a última com dados)
+                const headerRow = [];
+                for (let c = range.s.c; c <= range.e.c; c++) {
+                    const cell = worksheet[XLSX.utils.encode_cell({ r: headerRowIndex, c })];
+                    if (cell && cell.v) {
+                        headerRow.push(String(cell.v).trim());
+                    } else {
+                        headerRow.push(`col_${c}`); // fallback
+                    }
+                }
+
+                // Dados a partir da linha seguinte
+                const dataRows = [];
+                for (let r = headerRowIndex + 1; r <= range.e.r; r++) {
+                    const rowData = {};
+                    let hasData = false;
+                    for (let c = range.s.c; c <= range.e.c; c++) {
+                        const cell = worksheet[XLSX.utils.encode_cell({ r, c })];
+                        const headerName = headerRow[c - range.s.c] || `col_${c}`;
+                        let value = cell ? cell.v : '';
+                        if (value instanceof Date) {
+                            value = value.toISOString();
+                        }
+                        rowData[headerName] = value;
+                        if (value !== '' && value !== null && value !== undefined) {
+                            hasData = true;
+                        }
+                    }
+                    if (hasData) {
+                        dataRows.push(rowData);
+                    }
+                }
+                return dataRows;
+            }
+
+            convertBtn.addEventListener('click', function() {
+                const file = fileInput.files[0];
+                if (!file) {
+                    infoDiv.innerHTML = '<span class="error">⚠️ Nenhum arquivo selecionado.</span>';
+                    return;
+                }
+
+                infoDiv.innerHTML = '⏳ Lendo arquivo...';
+                outputPre.textContent = 'Processando...';
+
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const data = new Uint8Array(e.target.result);
+                        const workbook = XLSX.read(data, { type: 'array' });
+
+                        const result = convertXLSXToJSON(workbook);
+                        jsonData = result;
+
+                        const jsonString = JSON.stringify(result, null, 2);
+                        outputPre.textContent = jsonString;
+                        infoDiv.innerHTML = `✅ Conversão concluída! ${result.length} registros encontrados.`;
+                        downloadBtn.style.display = 'inline-block';
+                    } catch (err) {
+                        outputPre.textContent = 'ERRO: ' + err.message;
+                        infoDiv.innerHTML = `<span class="error">❌ ${err.message}</span>`;
+                        jsonData = null;
+                        downloadBtn.style.display = 'none';
+                    }
+                };
+                reader.onerror = function() {
+                    infoDiv.innerHTML = '<span class="error">❌ Erro ao ler o arquivo.</span>';
+                    outputPre.textContent = 'Erro de leitura.';
+                };
+                reader.readAsArrayBuffer(file);
+            });
+
+            downloadBtn.addEventListener('click', function() {
+                if (!jsonData) {
+                    alert('Nenhum dado disponível para download.');
+                    return;
+                }
+                const jsonString = JSON.stringify(jsonData, null, 2);
+                const blob = new Blob([jsonString], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'shopee_orders.json';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            });
+
+            // Reset ao selecionar novo arquivo
+            fileInput.addEventListener('change', function() {
+                infoDiv.innerHTML = '';
+                downloadBtn.style.display = 'none';
+            });
+        })();
+    </script>
+</body>
+</html>
