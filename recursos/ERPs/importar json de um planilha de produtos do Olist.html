@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conversor OLIST ERP → JSON</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f0f4f8;
+            padding: 30px 20px;
+            display: flex;
+            justify-content: center;
+        }
+        .container {
+            max-width: 1000px;
+            width: 100%;
+            background: white;
+            padding: 30px;
+            border-radius: 16px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+        }
+        h1 {
+            color: #1a1a2e;
+            margin-bottom: 10px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .subtitle {
+            color: #555;
+            margin-bottom: 25px;
+            font-size: 0.95rem;
+        }
+        .upload-area {
+            border: 2px dashed #ccc;
+            border-radius: 12px;
+            padding: 30px;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color 0.3s, background 0.3s;
+            margin-bottom: 20px;
+        }
+        .upload-area:hover {
+            border-color: #0d6efd;
+            background: #f8faff;
+        }
+        .upload-area input[type="file"] {
+            display: none;
+        }
+        .upload-label {
+            font-size: 1.1rem;
+            color: #333;
+        }
+        .upload-label span {
+            color: #0d6efd;
+            font-weight: bold;
+        }
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px 25px;
+            align-items: center;
+            margin: 20px 0 10px;
+            padding: 15px;
+            background: #f8fafc;
+            border-radius: 10px;
+        }
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .control-group label {
+            font-weight: 500;
+            color: #333;
+        }
+        .control-group select,
+        .control-group input {
+            padding: 6px 12px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            background: white;
+        }
+        .btn {
+            background: #0d6efd;
+            color: white;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+            font-size: 0.95rem;
+        }
+        .btn:hover { background: #0b5ed7; }
+        .btn-success { background: #28a745; }
+        .btn-success:hover { background: #218838; }
+        .btn-secondary { background: #6c757d; }
+        .btn-secondary:hover { background: #5a6268; }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .hidden { display: none !important; }
+        .flex { display: flex; gap: 10px; flex-wrap: wrap; }
+        .info-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            margin: 10px 0;
+        }
+        .badge {
+            background: #e9ecef;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+        }
+        .error { color: #dc3545; font-weight: 500; }
+        .table-wrap {
+            overflow-x: auto;
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: white;
+            margin-top: 10px;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            font-size: 0.8rem;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 5px 8px;
+            text-align: left;
+            white-space: nowrap;
+        }
+        th {
+            background: #e9ecef;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            z-index: 2;
+        }
+        .highlight-row { background: #fff3cd !important; }
+        .json-output {
+            margin-top: 20px;
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 20px;
+            border-radius: 8px;
+            max-height: 500px;
+            overflow: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+            font-family: 'Courier New', monospace;
+            font-size: 0.8rem;
+        }
+        footer {
+            margin-top: 30px;
+            font-size: 0.8rem;
+            color: #888;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>📦 OLIST ERP → JSON</h1>
+</div>
+
+    <!-- Upload -->
+    <div class="upload-area" id="uploadArea">
+        <input type="file" id="fileInput" accept=".xlsx,.xls">
+        <div class="upload-label">
+            <span>Clique aqui</span> ou arraste seu arquivo <strong>.xls</strong> ou <strong>.xlsx</strong>.
+        </div>
+    </div>
+
+    <!-- Controles -->
+    <div id="controls" class="controls hidden">
+        <div class="control-group">
+            <label for="sheetSelect">Planilha:</label>
+            <select id="sheetSelect"></select>
+        </div>
+        <div class="control-group">
+            <label for="headerRowInput">Linha do cabeçalho:</label>
+            <input type="number" id="headerRowInput" min="0" value="0" step="1" style="width:70px;">
+            <span style="font-size:0.8rem;color:#666;">(0 = primeira linha)</span>
+        </div>
+        <div class="flex">
+            <button id="previewBtn" class="btn btn-secondary">Atualizar prévia</button>
+            <button id="convertBtn" class="btn">Converter → JSON</button>
+            <button id="downloadBtn" class="btn btn-success hidden">⬇ Baixar JSON</button>
+        </div>
+    </div>
+
+    <!-- Info e prévia -->
+    <div id="infoBar" class="info-bar hidden">
+        <span id="infoText" class="badge">Nenhum dado carregado</span>
+    </div>
+    <div id="previewSection" class="hidden">
+        <div class="table-wrap" id="tableWrap"></div>
+    </div>
+
+    <!-- JSON output -->
+    <div id="jsonOutput" class="json-output hidden">Aguardando conversão...</div>
+
+    <footer>Desenvolvido para OLIST ERP | Utiliza SheetJS para leitura de planilhas</footer>
+</div>
+
+<script>
+    (function() {
+        const fileInput = document.getElementById('fileInput');
+        const uploadArea = document.getElementById('uploadArea');
+        const controls = document.getElementById('controls');
+        const sheetSelect = document.getElementById('sheetSelect');
+        const headerRowInput = document.getElementById('headerRowInput');
+        const previewBtn = document.getElementById('previewBtn');
+        const convertBtn = document.getElementById('convertBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const infoText = document.getElementById('infoText');
+        const infoBar = document.getElementById('infoBar');
+        const previewSection = document.getElementById('previewSection');
+        const tableWrap = document.getElementById('tableWrap');
+        const jsonOutput = document.getElementById('jsonOutput');
+
+        let workbookData = null;
+        let sheetNames = [];
+        let currentSheetName = '';
+        let currentJson = null;
+
+        function showError(msg) {
+            infoText.textContent = '⚠️ ' + msg;
+            infoText.className = 'badge error';
+            jsonOutput.textContent = 'Erro: ' + msg;
+            jsonOutput.classList.remove('hidden');
+        }
+
+        function showInfo(msg) {
+            infoText.textContent = msg;
+            infoText.className = 'badge';
+        }
+
+        function clearPreview() { tableWrap.innerHTML = ''; }
+
+        // Carrega o arquivo
+        function loadFile(file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    workbookData = XLSX.read(data, { type: 'array' });
+                    sheetNames = workbookData.SheetNames;
+                    if (sheetNames.length === 0) {
+                        showError('O arquivo não contém planilhas.');
+                        return;
+                    }
+                    // Preenche seletor de planilhas
+                    sheetSelect.innerHTML = '';
+                    sheetNames.forEach((name, idx) => {
+                        const opt = document.createElement('option');
+                        opt.value = name;
+                        opt.textContent = name + (idx === 0 ? ' (primeira)' : '');
+                        sheetSelect.appendChild(opt);
+                    });
+                    // Tenta selecionar a planilha "Produtos" se existir
+                    let targetSheet = sheetNames.find(n => n.trim() === 'Produtos');
+                    if (!targetSheet) targetSheet = sheetNames[0];
+                    currentSheetName = targetSheet;
+                    sheetSelect.value = targetSheet;
+
+                    controls.classList.remove('hidden');
+                    infoBar.classList.remove('hidden');
+                    previewSection.classList.remove('hidden');
+                    jsonOutput.classList.add('hidden');
+                    downloadBtn.classList.add('hidden');
+                    currentJson = null;
+
+                    renderPreview(currentSheetName, parseInt(headerRowInput.value, 10) || 0);
+                    showInfo(`Arquivo carregado: ${file.name} | ${sheetNames.length} planilha(s)`);
+                } catch (err) {
+                    showError('Erro ao ler o arquivo: ' + err.message);
+                }
+            };
+            reader.onerror = function() {
+                showError('Erro na leitura do arquivo.');
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        // Renderiza prévia da planilha
+        function renderPreview(sheetName, headerRowIndex) {
+            if (!workbookData) return;
+            const ws = workbookData.Sheets[sheetName];
+            if (!ws) {
+                showError('Planilha não encontrada.');
+                return;
+            }
+            const range = XLSX.utils.decode_range(ws['!ref']);
+            const maxRows = Math.min(range.e.r + 1, 50);
+            const maxCols = Math.min(range.e.c + 1, 30);
+
+            const data = [];
+            for (let r = range.s.r; r < maxRows; r++) {
+                const row = [];
+                for (let c = range.s.c; c < maxCols; c++) {
+                    const cell = ws[XLSX.utils.encode_cell({ r, c })];
+                    let val = cell ? cell.v : '';
+                    if (val instanceof Date) val = val.toISOString().slice(0,10);
+                    row.push(val);
+                }
+                data.push(row);
+            }
+
+            if (data.length === 0) {
+                tableWrap.innerHTML = '<p style="padding:10px;">A planilha parece estar vazia.</p>';
+                return;
+            }
+
+            // Monta cabeçalho
+            let headerRowData = [];
+            if (headerRowIndex >= 0 && headerRowIndex < data.length) {
+                headerRowData = data[headerRowIndex];
+            } else {
+                headerRowData = Array.from({ length: data[0].length }, (_, i) => `Col ${i+1}`);
+            }
+
+            let html = '<table><thead><tr>';
+            for (let c = 0; c < headerRowData.length; c++) {
+                const val = headerRowData[c] !== undefined && headerRowData[c] !== '' ? headerRowData[c] : `Col ${c+1}`;
+                html += `<th>${val}</th>`;
+            }
+            html += '</tr></thead><tbody>';
+
+            for (let r = 0; r < data.length; r++) {
+                const isHeader = (r === headerRowIndex);
+                html += `<tr class="${isHeader ? 'highlight-row' : ''}">`;
+                const row = data[r];
+                for (let c = 0; c < Math.min(row.length, headerRowData.length); c++) {
+                    let cellVal = row[c] !== undefined ? row[c] : '';
+                    if (typeof cellVal === 'string' && cellVal.length > 50) cellVal = cellVal.slice(0,50)+'…';
+                    html += `<td>${cellVal}</td>`;
+                }
+                // Completa colunas faltantes
+                for (let c = row.length; c < headerRowData.length; c++) {
+                    html += `<td></td>`;
+                }
+                html += '</tr>';
+            }
+            html += '</tbody></table>';
+            tableWrap.innerHTML = html;
+            showInfo(`Prévia da planilha "${sheetName}" (linha ${headerRowIndex} destacada como cabeçalho)`);
+        }
+
+        // Converte para JSON
+        function convertToJSON(sheetName, headerRowIndex) {
+            if (!workbookData) {
+                showError('Nenhum arquivo carregado.');
+                return null;
+            }
+            const ws = workbookData.Sheets[sheetName];
+            if (!ws) {
+                showError('Planilha não encontrada.');
+                return null;
+            }
+            const range = XLSX.utils.decode_range(ws['!ref']);
+
+            // Cabeçalho
+            const headerRow = [];
+            const maxCols = range.e.c + 1;
+            for (let c = range.s.c; c < maxCols; c++) {
+                const cell = ws[XLSX.utils.encode_cell({ r: headerRowIndex, c })];
+                let val = cell ? cell.v : '';
+                if (val === undefined || val === null) val = '';
+                headerRow.push(String(val).trim() || `col_${c+1}`);
+            }
+
+            // Dados
+            const result = [];
+            for (let r = headerRowIndex + 1; r <= range.e.r; r++) {
+                const rowObj = {};
+                let hasData = false;
+                for (let c = range.s.c; c < maxCols; c++) {
+                    const cell = ws[XLSX.utils.encode_cell({ r, c })];
+                    let val = cell ? cell.v : '';
+                    if (val instanceof Date) val = val.toISOString();
+                    if (typeof val === 'string') val = val.trim();
+                    const key = headerRow[c - range.s.c] || `col_${c+1}`;
+                    rowObj[key] = val;
+                    if (val !== '' && val !== null && val !== undefined) {
+                        hasData = true;
+                    }
+                }
+                if (hasData) {
+                    result.push(rowObj);
+                }
+            }
+            return result;
+        }
+
+        // ---------- Eventos ----------
+        uploadArea.addEventListener('click', () => fileInput.click());
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.style.borderColor = '#0d6efd';
+            uploadArea.style.background = '#f0f7ff';
+        });
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.style.borderColor = '#ccc';
+            uploadArea.style.background = 'transparent';
+        });
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.style.borderColor = '#ccc';
+            uploadArea.style.background = 'transparent';
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                fileInput.files = files;
+                loadFile(files[0]);
+            }
+        });
+        fileInput.addEventListener('change', function() {
+            if (this.files.length > 0) {
+                loadFile(this.files[0]);
+            }
+        });
+
+        sheetSelect.addEventListener('change', function() {
+            currentSheetName = this.value;
+            const hRow = parseInt(headerRowInput.value, 10) || 0;
+            renderPreview(currentSheetName, hRow);
+            jsonOutput.classList.add('hidden');
+            downloadBtn.classList.add('hidden');
+            currentJson = null;
+        });
+
+        previewBtn.addEventListener('click', function() {
+            if (!workbookData) return;
+            const hRow = parseInt(headerRowInput.value, 10) || 0;
+            renderPreview(currentSheetName, hRow);
+            jsonOutput.classList.add('hidden');
+            downloadBtn.classList.add('hidden');
+            currentJson = null;
+        });
+
+        convertBtn.addEventListener('click', function() {
+            if (!workbookData) {
+                showError('Nenhum arquivo carregado.');
+                return;
+            }
+            const hRow = parseInt(headerRowInput.value, 10) || 0;
+            const sheet = currentSheetName;
+            try {
+                const jsonArray = convertToJSON(sheet, hRow);
+                if (jsonArray === null) return;
+                if (jsonArray.length === 0) {
+                    showError('Nenhum dado encontrado abaixo da linha de cabeçalho.');
+                    jsonOutput.textContent = '[]';
+                    jsonOutput.classList.remove('hidden');
+                    downloadBtn.classList.add('hidden');
+                    currentJson = null;
+                    return;
+                }
+                currentJson = jsonArray;
+                jsonOutput.textContent = JSON.stringify(jsonArray, null, 2);
+                jsonOutput.classList.remove('hidden');
+                downloadBtn.classList.remove('hidden');
+                showInfo(`✅ Conversão concluída! ${jsonArray.length} produtos.`);
+            } catch (err) {
+                showError('Erro na conversão: ' + err.message);
+            }
+        });
+
+        downloadBtn.addEventListener('click', function() {
+            if (!currentJson) {
+                alert('Nenhum dado para baixar. Converta primeiro.');
+                return;
+            }
+            const jsonString = JSON.stringify(currentJson, null, 2);
+            const blob = new Blob([jsonString], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'produtos_olist.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        });
+
+        console.log('Conversor OLIST ERP → JSON carregado.');
+    })();
+</script>
+</body>
+</html>
